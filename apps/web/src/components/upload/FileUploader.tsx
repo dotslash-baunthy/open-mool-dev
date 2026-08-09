@@ -3,12 +3,8 @@
 import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileAudio, FileVideo, X, CheckCircle } from 'lucide-react';
-import { cn } from '@/lib/utils'; // Assuming cn exists, if not I will replace or create it.
-
-// Helper for classNames if cn doesn't exist? I'll assume it likely does in a modern stack or use `clsx` directly if I can import it.
-// Checking package.json: "clsx": "^2.1.1", "tailwind-merge": "^3.4.0". Typically `lib/utils.ts` has `cn`.
-// I'll assume it exists. If not, I'll fallback to simple string interpolation or create it.
+import { Upload, FileAudio, FileVideo, FileImage, X, CheckCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface FileUploaderProps {
     file: File | null;
@@ -34,22 +30,22 @@ export function FileUploader({ file, setFile, progress, status, error }: FileUpl
             const rejection = fileRejections[0];
 
             const errorCode = rejection.errors[0]?.code;
-            
+
             // Explicit handling for oversized files with size feedback.
             if (errorCode === 'file-too-large') {
                 const file = rejection.file;
                 const rawSizeMB = file.size / (1024 * 1024);
-                const sizeMB = rawSizeMB % 1 === 0 ? rawSizeMB.toString() : rawSizeMB.toFixed(1); //to display decimal values only when needed.
+                const sizeMB = rawSizeMB % 1 === 0 ? rawSizeMB.toString() : rawSizeMB.toFixed(1);
                 const limitMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(0);
 
-                setValidationError(`File too large, sad. Maximum file size is ${limitMB}MB. Your file is ${sizeMB}MB.`);
-            } 
-            
+                setValidationError(`File too large. Maximum size is ${limitMB}MB. (Your file: ${sizeMB}MB)`);
+            }
+
             //reject unsupported formats early. (UX-level validation)
             else if (errorCode === 'file-invalid-type') {
-                setValidationError(`Invalid file type. Please upload MP3, WAV, MP4, or MOV files only`);
-            } 
-            
+                setValidationError(`Invalid file type. Please upload audio (MP3, WAV), video (MP4, MOV), or image (JPG, PNG, WebP, HEIC) files.`);
+            }
+
             //fallback for unknown rejection cases
             else {
                 setValidationError(`Failed to upload file. Please try again`);
@@ -62,13 +58,13 @@ export function FileUploader({ file, setFile, progress, status, error }: FileUpl
         if (acceptedFiles.length > 0) {
             const file = acceptedFiles[0];
 
-            if(file.size > MAX_FILE_SIZE) {
+            if (file.size > MAX_FILE_SIZE) {
                 const rawSizeMB = file.size / (1024 * 1024);
-                const sizeMB = rawSizeMB % 1 === 0 ? rawSizeMB.toString() : rawSizeMB.toFixed(1); //to display decimal values only when needed.
+                const sizeMB = rawSizeMB % 1 === 0 ? rawSizeMB.toString() : rawSizeMB.toFixed(1);
                 const limitMB = (MAX_FILE_SIZE / (1024 * 1024)).toFixed(0);
 
-                setValidationError(`Hey, File too large. Maximum file size is ${limitMB}MB. Your file is ${sizeMB}MB. Try in parts or reduce the size.`);
-                
+                setValidationError(`File too large. Maximum size is ${limitMB}MB. (Your file: ${sizeMB}MB)`);
+
                 //do not allow invalid files into application state
                 return;
             }
@@ -79,10 +75,11 @@ export function FileUploader({ file, setFile, progress, status, error }: FileUpl
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
         accept: {
-            'audio/*': ['.mp3', '.wav'],
-            'video/*': ['.mp4', '.mov']
+            'audio/*': ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'],
+            'video/*': ['.mp4', '.mov', '.avi', '.mkv', '.webm'],
+            'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.heic', '.heif'],
         },
-        maxSize: 500 * 1024 * 1024, // 500MB
+        maxSize: MAX_FILE_SIZE,
         maxFiles: 1,
         multiple: false,
         disabled: status === 'uploading' || status === 'success'
@@ -125,7 +122,7 @@ export function FileUploader({ file, setFile, progress, status, error }: FileUpl
                                     Click to upload or drag and drop
                                 </p>
                                 <p className="text-xs text-slate-500">
-                                    MP3, WAV, MP4 (max 500MB)
+                                    MP3, WAV, MP4, MOV, JPG, PNG, WebP (max 500MB)
                                 </p>
                             </div>
                         </motion.div>
@@ -138,7 +135,11 @@ export function FileUploader({ file, setFile, progress, status, error }: FileUpl
                             className="flex items-center gap-4 w-full"
                         >
                             <div className="p-3 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                {file.type.startsWith('video') ? <FileVideo className="w-6 h-6" /> : <FileAudio className="w-6 h-6" />}
+                                {file.type.startsWith('video')
+                                    ? <FileVideo className="w-6 h-6" />
+                                    : file.type.startsWith('image')
+                                        ? <FileImage className="w-6 h-6" />
+                                        : <FileAudio className="w-6 h-6" />}
                             </div>
 
                             <div className="flex-1 min-w-0 text-left">

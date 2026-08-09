@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useUser } from '@auth0/nextjs-auth0/client';
+import { useUser } from '@/lib/client-auth';
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Logo } from "@/components/Logo";
 
@@ -43,6 +43,7 @@ export function Header() {
                         <ThemeToggle />
                         <Link href="/about" className="hover:text-[var(--text-primary)] transition-colors">About</Link>
                         <Link href="/how-it-works" className="hover:text-[var(--text-primary)] transition-colors">How it Works</Link>
+                        <Link href="/explore" className="hover:text-[var(--text-primary)] transition-colors">Explore</Link>
                     </div>
 
                     <div className="flex items-center gap-4">

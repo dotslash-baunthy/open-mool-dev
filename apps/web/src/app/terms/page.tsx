@@ -54,7 +54,7 @@ export default function TermsOfService() {
                     <h2 className="font-heading text-2xl text-text-primary mb-4">3. User Accounts</h2>
                     <h3 className="font-heading text-xl text-text-primary mb-3">3.1 Registration</h3>
                     <p className="mb-4">
-                        To contribute content or access certain features, you must create an account through our authentication provider (Auth0). You agree to provide accurate information and keep your credentials secure.
+                        To contribute content or access certain features, you must create an account through our authentication provider (Clerk). You agree to provide accurate information and keep your credentials secure.
                     </p>
                     <h3 className="font-heading text-xl text-text-primary mb-3">3.2 Account Responsibilities</h3>
                     <ul className="list-disc pl-6 space-y-2 mb-4">
@@ -296,7 +296,7 @@ export default function TermsOfService() {
                 </section>
 
                 {/* Footer Links */}
-                <div className="mt-12 pt-8 border-t border-gray-200 flex flex-wrap gap-4 text-sm">
+                <div className="mt-12 pt-8 border-t border-gray-200 dark:border-gray-800 flex flex-wrap gap-4 text-sm">
                     <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
                     <Link href="/about" className="text-primary hover:underline">About Open Mool</Link>
                     <Link href="/" className="text-text-secondary hover:text-primary">Home</Link>

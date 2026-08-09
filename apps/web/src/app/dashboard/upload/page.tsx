@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { Upload, CheckCircle, Pause, Play, ArrowRight } from 'lucide-react';
+import { Upload, CheckCircle, Pause, Play, ArrowRight, RotateCcw, X } from 'lucide-react';
 import Link from 'next/link';
 import { FileUploader } from '@/components/upload/FileUploader';
 import { AudioPreview } from '@/components/upload/AudioPreview';
@@ -12,7 +12,13 @@ import { MetadataForm, Metadata } from '@/components/upload/MetadataForm';
 import { useMultipartUpload } from '@/hooks/useMultipartUpload';
 import { cn } from '@/lib/utils';
 
+export const runtime = 'edge';
+
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
+const IS_LOCAL_API =
+    API_URL.includes('localhost') ||
+    API_URL.includes('127.0.0.1');
 
 export default function UploadPage() {
     const [file, setFile] = useState<File | null>(null);
@@ -103,19 +109,59 @@ export default function UploadPage() {
             setError('Multipart upload failed.');
             setStatus('error');
         }
-    }, [multipart.startUpload]);
+    }, [multipart]);
+
+    const handleRetry = React.useCallback(async () => {
+        setStatus('uploading');
+        setError('');
+
+        try {
+            if (isLargeFile || IS_LOCAL_API) {
+                // Robust retry using hook's internal state if file is missing in UI
+                const key = await multipart.resumeUpload(file || undefined);
+                if (key) {
+                    setUploadKey(key);
+                    setStatus('success');
+                }
+            } else {
+                // Regular upload still needs the file in UI state
+                if (file) await startUpload(file);
+            }
+        } catch (err) {
+            console.error('Retry failed:', err);
+            setError('Retry failed. Please check connection and try again.');
+            setStatus('error');
+        }
+    }, [file, isLargeFile, multipart, startUpload]);
+
+    const handleRemove = React.useCallback(async () => {
+        if (multipart.isUploading) {
+            await multipart.cancelUpload();
+        }
+        setFile(null);
+        setStatus('idle');
+        setProgress(0);
+        setUploadKey(null);
+        setError('');
+        setMetadata({
+            title: '',
+            description: '',
+            language: '',
+            location: null
+        });
+    }, [multipart]);
 
     useEffect(() => {
         if (file && status === 'idle') {
             const fileSizeInMB = file.size / (1024 * 1024);
             const isLarge = fileSizeInMB > 100;
-            const isLocalDev = process.env.NEXT_PUBLIC_MOCK_LOGIN === 'true';
+            const shouldForceMultipart = IS_LOCAL_API;
 
             setIsLargeFile(isLarge);
 
-            // In local dev (mock login), always use multipart because it proxies through the worker.
-            // Direct S3 uploads (presigned urls) won't work locally without real credentials.
-            if (isLarge || isLocalDev) {
+            // For local API targets, prefer multipart because direct presigned uploads
+            // often require cloud R2 credentials that OSS contributors do not have.
+            if (isLarge || shouldForceMultipart) {
                 startMultipartUpload(file);
             } else {
                 startUpload(file);
@@ -124,10 +170,10 @@ export default function UploadPage() {
     }, [file, status, startUpload, startMultipartUpload]);
 
     useEffect(() => {
-        if (isLargeFile && multipart.isUploading) {
+        if (multipart.isUploading) {
             setProgress(multipart.progress);
         }
-    }, [multipart.progress, multipart.isUploading, isLargeFile]);
+    }, [multipart.progress, multipart.isUploading]);
 
     const handleSubmit = async () => {
         if (!uploadKey || !metadata.title) return;
@@ -198,9 +244,20 @@ export default function UploadPage() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                     <div className="lg:col-span-5 space-y-8">
                         <div className="bg-[var(--bg-subtle)] p-8 border border-[var(--accent-primary)]/10">
-                            <h3 className="text-sm uppercase tracking-widest font-bold mb-6 flex items-center gap-3">
-                                <Upload className="w-4 h-4" /> Source File
-                            </h3>
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="text-sm uppercase tracking-widest font-bold flex items-center gap-3">
+                                    <Upload className="w-4 h-4" /> Source File
+                                </h3>
+                                {file && (
+                                    <button
+                                        onClick={handleRemove}
+                                        className="p-1.5 rounded-full text-[var(--text-secondary)] hover:bg-[var(--text-secondary)]/10 hover:text-red-500 transition-colors"
+                                        title="Remove file"
+                                    >
+                                        <X className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
 
                             {/* ✅ Keyboard-accessible wrapper */}
                             <div
@@ -216,15 +273,47 @@ export default function UploadPage() {
                                     setFile={setFile}
                                     progress={progress}
                                     status={status}
-                                    error={error}
+                                    error="" // Handle error display externally for retry support
                                 />
+
+                                {status === 'error' && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center justify-between gap-4"
+                                    >
+                                        <div className="flex items-center gap-3 text-sm text-red-600 dark:text-red-400">
+                                            <span className="font-bold">Error:</span> {error}
+                                        </div>
+                                        <button
+                                            onClick={handleRetry}
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-bold uppercase tracking-wider rounded transition-colors"
+                                        >
+                                            <RotateCcw className="w-3 h-3" />
+                                            Retry
+                                        </button>
+                                    </motion.div>
+                                )}
                             </div>
                         </div>
 
-                        {file && status === 'success' &&
-                            (file.type.startsWith('audio')
-                                ? <AudioPreview file={file} />
-                                : <VideoPreview file={file} />)}
+                        {file && status === 'success' && (
+                            file.type.startsWith('audio')
+                                ? <AudioPreview file={file} onRemove={handleRemove} />
+                                : file.type.startsWith('image')
+                                    ? (
+                                        <div className="bg-[var(--bg-subtle)] border border-[var(--accent-primary)]/10 p-4 rounded-lg">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                                src={URL.createObjectURL(file)}
+                                                alt={file.name}
+                                                className="w-full max-h-64 object-contain rounded"
+                                            />
+                                            <p className="text-xs text-[var(--text-secondary)] mt-2 truncate font-[family-name:var(--font-gotu)]">{file.name}</p>
+                                        </div>
+                                    )
+                                    : <VideoPreview file={file} onRemove={handleRemove} />
+                        )}
                     </div>
 
                     <div className="lg:col-span-7">

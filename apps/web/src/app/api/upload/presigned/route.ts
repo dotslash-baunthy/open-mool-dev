@@ -1,23 +1,26 @@
-import { getSession } from '@auth0/nextjs-auth0';
+import { authClient } from '@/lib/auth';
+import { buildInternalApiHeaders } from '@/lib/internal-api-auth';
 import { NextResponse } from 'next/server';
+
+export const runtime = 'edge';
+
 
 export const POST = async (req: Request) => {
   try {
-    const session = await getSession();
+    const session = await authClient.getSession();
     if (!session || !session.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const body = await req.json();
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
-    const apiSecret = process.env.API_SECRET;
+    const authHeaders = await buildInternalApiHeaders(session.user.sub);
 
     const response = await fetch(`${apiUrl}/upload/presigned`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-user-id': session.user.sub,
-        'x-api-secret': apiSecret || '',
+        ...authHeaders,
       },
       body: JSON.stringify(body),
     });
@@ -29,8 +32,12 @@ export const POST = async (req: Request) => {
     }
 
     return NextResponse.json(data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Proxy error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({
+      error: 'Internal Server Error',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    }, { status: 500 });
   }
 };

@@ -54,8 +54,8 @@ We utilize a modern, edge-first stack designed for sustainability and speed:
 | **Edge** | [Cloudflare Pages](https://pages.cloudflare.com/) (Deploy), [Cloudflare Workers](https://workers.cloudflare.com/) (API) |
 | **Database** | [Cloudflare D1](https://developers.cloudflare.com/d1/) (SQLite at the Edge) |
 | **Storage** | [Cloudflare R2](https://developers.cloudflare.com/r2/) (Zero Egress Object Storage) |
-| **Auth** | [Auth0](https://auth0.com/) (Universal Login) |
-| **AI** | [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) + [OpenAI](https://openai.com/) |
+| **Auth** | [Clerk](https://clerk.com/) (Universal Login, hosted sign-in/sign-up) |
+| **AI** | [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/) + [Google Gemini API](https://ai.google.dev/) |
 
 ---
 
@@ -83,6 +83,32 @@ pnpm dev
 # Web: http://localhost:3000
 # API: http://localhost:8787
 ```
+
+### Local Environment Setup (Auth + API)
+
+For full dashboard and upload flows, configure both web and API local env files:
+
+```bash
+# Web env
+cp apps/web/.env.example apps/web/.env.local
+
+# API env
+cp apps/api/.dev.vars.example apps/api/.dev.vars
+```
+
+Then set Clerk dev keys and shared signing secret:
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (web)
+- `CLERK_SECRET_KEY` (web)
+- `CLERK_ISSUER` (api)
+- `CLERK_JWKS_URL` (api)
+- `INTERNAL_PROXY_SIGNING_SECRET` (same value in web + api)
+
+If you do not have Clerk keys yet and want to test protected flows locally, you can enable local-only bypass in both files:
+- `LOCAL_DEV_AUTH_BYPASS='true'`
+
+This creates a local dummy user (`dev_dummy_user`) and is blocked to localhost-only runtime checks.
+
+For contributor onboarding details, see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ---
 

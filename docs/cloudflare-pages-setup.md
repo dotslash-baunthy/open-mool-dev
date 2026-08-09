@@ -19,18 +19,50 @@ Cloudflare Pages provides built-in CI/CD through direct Git integration - no Git
 5. Configure the build settings:
    - **Project name**: `open-mool-web`
    - **Production branch**: `main` or `master`
-   - **Framework preset**: Next.js (Static HTML Export)
-   - **Build command**: `pnpm install && pnpm --filter web run build`
-   - **Build output directory**: `apps/web/out`
+   - **Framework preset**: Next.js
+   - **Build command**: `pnpm install && pnpm --filter web run pages:build`
+   - **Build output directory**: `apps/web/.vercel/output/static`
    - **Root directory**: `/` (leave as default)
-   - **Environment variables**: None required (see `apps/web/.env.example` for details)
+   - **Environment variables**: Required (see section below)
 6. Click **"Save and Deploy"**
 
 ### Environment Variables
 
-Currently, the web application **does not require any environment variables**. It is configured as a static export without API routes or server-side features.
+The web application uses Clerk auth and server-side proxy routes, so environment variables are required.
 
-For reference, see the `apps/web/.env.example` file which documents the structure for future integrations if needed.
+Set these in Cloudflare Pages (staging and production as applicable):
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+- `CLERK_SECRET_KEY`
+- `NEXT_PUBLIC_API_URL`
+- `API_URL`
+- `INTERNAL_PROXY_SIGNING_SECRET`
+- `ADMIN_USER_IDS` if you want `/dashboard/admin` enabled
+- `LOCAL_DEV_AUTH_BYPASS='false'`
+
+Optional legacy fallback:
+- `API_SECRET`
+
+For local reference values, see `apps/web/.env.example`.
+
+Do not set `LOCAL_DEV_AUTH_BYPASS=true` in Cloudflare environments. It is intended for localhost contributor workflows only.
+
+### How to map the values
+
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`: Clerk Dashboard -> API Keys
+- `CLERK_SECRET_KEY`: Clerk Dashboard -> API Keys
+- `NEXT_PUBLIC_API_URL`: public URL of the API Worker for the same environment
+- `API_URL`: same value as `NEXT_PUBLIC_API_URL` unless you intentionally route server-side traffic differently
+- `INTERNAL_PROXY_SIGNING_SECRET`: a long random shared secret that must exactly match the Worker secret of the same name
+
+### Current Open Mool Cloudflare state
+
+As of the latest repo verification, the `open-mool` Pages project already uses the current build pipeline:
+
+- Build command: `pnpm install && pnpm --filter web run pages:build`
+- Output directory: `.vercel/output/static`
+- Root directory: `apps/web`
+
+The Pages project deployment config for both preview and production expects the Clerk-era variables listed above. The next production deploy will use that config, so the remaining requirement is making sure the actual production values are populated in the Pages dashboard before promoting `dev` to `master`.
 
 ## Step 2: Verify the Deployment
 
@@ -62,7 +94,7 @@ You can also add a custom domain in the Cloudflare Pages settings.
 
 ### Build fails with dependency errors
 - Check that `pnpm-lock.yaml` is committed to the repository
-- Verify the build command in Cloudflare Pages settings matches: `pnpm install && pnpm --filter web run build`
+- Verify the build command in Cloudflare Pages settings matches: `pnpm install && pnpm --filter web run pages:build`
 - Check build logs in the Cloudflare Pages dashboard for specific errors
 
 ### Build fails with ESLint errors
@@ -83,11 +115,11 @@ If you need to deploy manually (not recommended for production):
 # Install dependencies
 pnpm install
 
-# Build the app
-pnpm --filter web run build
+# Build the app for Pages
+pnpm --filter web run pages:build
 
 # Deploy using Wrangler CLI (requires CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID)
-npx wrangler pages deploy apps/web/out --project-name=open-mool-web
+npx wrangler pages deploy apps/web/.vercel/output/static --project-name=open-mool-web
 ```
 
 ## Security Best Practices

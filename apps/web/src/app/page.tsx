@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { auth0 } from "@/lib/auth0";
+import { authClient } from "@/lib/auth";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { TriadSection } from "@/components/landing/TriadSection";
 import { StatsSection } from "@/components/landing/StatsSection";
@@ -12,7 +12,7 @@ export const runtime = 'edge';
 export default async function Home() {
     let isLoggedIn = false;
     try {
-        const session = await auth0.getSession();
+        const session = await authClient.getSession();
         isLoggedIn = !!session?.user;
     } catch (error) {
         console.error('Session error:', error);
@@ -40,7 +40,7 @@ export default async function Home() {
             <CTASection />
 
             {/* Footer */}
-            <footer className="py-12 px-8 border-t border-gray-100">
+            <footer className="py-12 px-8 border-t border-gray-100 dark:border-gray-800">
                 <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
                     <div className="font-human text-sm text-text-secondary">
                         Dev-Gatha &bull; Itihas &bull; Reeti-Rivaj
@@ -57,6 +57,12 @@ export default async function Home() {
                             className="font-body text-sm text-text-secondary hover:text-primary transition-colors"
                         >
                             How It Works
+                        </Link>
+                        <Link
+                            href="/explore"
+                            className="font-body text-sm text-text-secondary hover:text-primary transition-colors"
+                        >
+                            The Oracle
                         </Link>
                         <a
                             href="https://github.com/open-mool/open-mool"

@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import axios from 'axios';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+
+// Using relative path for the internal Next.js proxy to ensure auth
+const MULTIPART_BASE_URL = '/api/upload/multipart';
 
 interface UploadPart {
     partNumber: number;
@@ -23,6 +25,7 @@ export function useMultipartUpload() {
     const [progress, setProgress] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const fileRef = useRef<File | null>(null);
 
     const clearState = useCallback(() => {
         localStorage.removeItem('multipart-upload-state');
@@ -30,7 +33,7 @@ export function useMultipartUpload() {
     }, []);
 
     const initiateUpload = useCallback(async (file: File): Promise<{ uploadId: string; key: string }> => {
-        const { data } = await axios.post(`${API_URL}/upload/multipart/create`, {
+        const { data } = await axios.post(`${MULTIPART_BASE_URL}/create`, {
             filename: file.name,
             contentType: file.type,
         });
@@ -49,6 +52,7 @@ export function useMultipartUpload() {
     }, []);
 
     const startUpload = useCallback(async (file: File) => {
+        fileRef.current = file;
         setIsUploading(true);
         setIsPaused(false);
 
@@ -70,13 +74,15 @@ export function useMultipartUpload() {
                     break;
                 }
 
-                const etag = await uploadChunk(file, i, state.uploadId, state.key);
+                const etag = await uploadChunk(file, i, state.uploadId, state.key, (chunkProgress) => {
+                    const totalProgress = ((i - 1 + chunkProgress) / totalParts) * 100;
+                    setProgress(totalProgress);
+                });
                 state.uploadedParts.push({ partNumber: i, etag });
                 state.currentPartNumber = i + 1;
 
                 setUploadState({ ...state });
                 saveState(state);
-                setProgress((i / totalParts) * 100);
             }
 
             // Complete if all parts uploaded
@@ -99,9 +105,13 @@ export function useMultipartUpload() {
         setIsUploading(false);
     }, []);
 
-    const resumeUpload = useCallback((file: File) => {
+    const resumeUpload = useCallback((file?: File) => {
+        const fileToUse = file || fileRef.current;
+        if (!fileToUse) {
+            throw new Error('No file available to resume upload');
+        }
         setIsPaused(false);
-        return startUpload(file);
+        return startUpload(fileToUse);
     }, [startUpload]);
 
     const cancelUpload = useCallback(async () => {
@@ -141,20 +151,26 @@ const uploadChunk = async (
     file: File,
     partNumber: number,
     uploadId: string,
-    key: string
+    key: string,
+    onProgress: (progress: number) => void
 ): Promise<string> => {
     const start = (partNumber - 1) * CHUNK_SIZE;
     const end = Math.min(start + CHUNK_SIZE, file.size);
     const chunk = file.slice(start, end);
 
     const { data } = await axios.put(
-        `${API_URL}/upload/multipart/${uploadId}/part`,
+        `${MULTIPART_BASE_URL}/${uploadId}/part`,
         chunk,
         {
             headers: {
                 'Content-Type': 'application/octet-stream',
             },
             params: { partNumber, key },
+            onUploadProgress: (progressEvent) => {
+                if (progressEvent.total) {
+                    onProgress(progressEvent.loaded / progressEvent.total);
+                }
+            },
         }
     );
 
@@ -162,14 +178,14 @@ const uploadChunk = async (
 };
 
 const completeUpload = async (uploadId: string, key: string, parts: UploadPart[]) => {
-    await axios.post(`${API_URL}/upload/multipart/${uploadId}/complete`, {
+    await axios.post(`${MULTIPART_BASE_URL}/${uploadId}/complete`, {
         key,
         parts,
     });
 };
 
 const abortUpload = async (uploadId: string, key: string) => {
-    await axios.delete(`${API_URL}/upload/multipart/${uploadId}/abort`, {
+    await axios.delete(`${MULTIPART_BASE_URL}/${uploadId}/abort`, {
         data: { key },
     });
 };

@@ -1,41 +1,57 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { auth0 } from "./lib/auth0";
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 
-export async function middleware(request: NextRequest) {
-    try {
-        const response = await auth0.middleware(request);
+const isProtectedRoute = createRouteMatcher([
+    '/dashboard(.*)',
+    '/api/upload(.*)',
+    '/api/media(.*)',
+    '/api/user(.*)',
+    '/api/admin(.*)',
+]);
 
-        // If a public route returns 403 (Forbidden), it often means the session verify failed 
-        // or the user is in a bad state. Clear the session and try as anonymous.
-        if (response.status === 403) {
-            const nextResponse = NextResponse.next();
-            nextResponse.cookies.delete('appSession');
-            return nextResponse;
+const isAdminRoute = createRouteMatcher([
+    '/dashboard/admin(.*)',
+    '/api/admin(.*)',
+]);
+
+const isLocalDevAuthBypassEnabled = () => {
+    const apiUrl = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || '';
+    const isLocalApiTarget = apiUrl.includes('localhost') || apiUrl.includes('127.0.0.1');
+    return process.env.LOCAL_DEV_AUTH_BYPASS === 'true' && isLocalApiTarget;
+};
+
+export default clerkMiddleware(async (auth, request) => {
+    if (isProtectedRoute(request)) {
+        const hostname = request.nextUrl.hostname;
+        const isLocalRequest = hostname === 'localhost' || hostname === '127.0.0.1';
+
+        // Local development bypass
+        if (isLocalRequest && isLocalDevAuthBypassEnabled()) {
+            return;
         }
 
-        return response;
-    } catch (error) {
-        // If there's a session decryption error (JWEInvalid), clear the corrupted cookie
-        if (error instanceof Error && error.message.includes('JWE')) {
-            console.warn('Session decryption error, clearing cookie:', error.message);
-            // Use next() instead of redirect to prevent redirect loops
-            const response = NextResponse.next();
-            response.cookies.delete('appSession');
-            return response;
+        const authState = await auth();
+        if (!authState.userId) {
+            return authState.redirectToSignIn({ returnBackUrl: request.url });
         }
-        throw error;
+
+        // Apply admin checks for admin routes
+        if (isAdminRoute(request)) {
+            const adminIds = (process.env.ADMIN_USER_IDS || '')
+                .split(',')
+                .map((id) => id.trim())
+                .filter(Boolean);
+
+            if (adminIds.length > 0 && !adminIds.includes(authState.userId)) {
+                // Not an admin, redirect them to the generic dashboard
+                return Response.redirect(new URL('/dashboard', request.url));
+            }
+        }
     }
-}
+});
 
 export const config = {
     matcher: [
-        /*
-         * Match all request paths except for the ones starting with:
-         * - _next/static (static files)
-         * - _next/image (image optimization files)
-         * - favicon.ico, sitemap.xml, robots.txt (metadata files)
-         */
-        "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+        '/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|png|gif|svg|ttf|woff2?|ico|json|csv|docx?|xlsx?|zip|webmanifest)).*)',
+        '/(api|trpc)(.*)',
     ],
 };

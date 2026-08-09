@@ -1,28 +1,19 @@
 import { NextResponse } from 'next/server';
-import { auth0 } from '@/lib/auth0';
+import { authClient } from '@/lib/auth';
+import { buildInternalApiHeaders } from '@/lib/internal-api-auth';
 
 export const runtime = 'edge';
 
 const API_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8787';
-const API_SECRET = process.env.API_SECRET;
-
 export async function GET() {
     try {
-        const session = await auth0.getSession();
+        const session = await authClient.getSession();
         
         if (!session?.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Forward request to API with authenticated user ID and API secret
-        const headers: Record<string, string> = {
-            'x-user-id': session.user.sub,
-        };
-        
-        // Add API secret for authentication if configured
-        if (API_SECRET) {
-            headers['x-api-secret'] = API_SECRET;
-        }
+        const headers = await buildInternalApiHeaders(session.user.sub);
 
         const response = await fetch(`${API_URL}/api/media/my-uploads`, {
             headers,
